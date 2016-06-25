@@ -1,0 +1,2 @@
+ucl_drone
+-DCATKIN_DEVEL_PREFIX=/home/felicien/Desktop/origin2/ucl_drone/devel -DCMAKE_INSTALL_PREFIX=/home/felicien/Desktop/origin2/ucl_drone/install -G Unix Makefiles

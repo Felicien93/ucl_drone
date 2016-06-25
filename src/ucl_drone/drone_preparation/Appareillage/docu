@@ -1,0 +1,6 @@
+rostopic echo -p /ucl_drone_5/mapcell/i > Mesures/global_i.txt & rostopic echo -p /ucl_drone_5/mapcell/j > Mesures/global_j.txt &
+rostopic echo -p /ucl_drone_5/mapcell/type > Mesures/global_type.txt &
+rostopic echo -p /ucl_drone_5/pose_estimation/x > Mesures/global_master_x.txt &
+rostopic echo -p /ucl_drone_5/pose_estimation/y > Mesures/global_master_y.txt &
+rostopic echo -p /ucl_drone_4/pose_estimation/x > Mesures/global_slave_x.txt &
+rostopic echo -p /ucl_drone_4/pose_estimation/y > Mesures/global_slave_y.txt

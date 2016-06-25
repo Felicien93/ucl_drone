@@ -1,0 +1,26 @@
+<?xml version="1.0"?>
+<!-- This is a sample lanuch file, please change it based on your needs -->
+<launch>
+  <!-- IPv4 address of your drones -->
+  <arg name="drone_name" default="drone_5" />
+  <arg name="mb1_ip" default="192.168.1.5" />
+  <arg name="mb2_ip" default="192.168.1.15" />
+  <!-- Ultrasound frequency (7 or 8). -->
+  <arg name="freq" default="8" />
+
+
+  <group ns="ucl_$(arg drone_name)">
+
+
+            <node name="ucl_drone_computer_vision" pkg="ucl_drone" type="computer_vision" output="screen">
+              <!--<param name="video_channel" value="motherboard2/ardrone/front/image_raw"/>-->
+              <param name="drone_prefix" value="motherboard2/"/>
+              <param name="video_channel" value="ardrone/front/image_rect_color"/>
+              <param name="cam_type" value="front"/>
+            </node>
+
+            <node name="ucl_drone_simple_map" pkg="ucl_drone" type="simple_map" output="screen">
+            </node>
+</group>
+
+</launch>

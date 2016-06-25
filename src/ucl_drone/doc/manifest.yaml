@@ -1,0 +1,27 @@
+actions: []
+authors: ''
+brief: ''
+bugtracker: ''
+depends:
+- catkin
+- roscpp
+- sensor_msgs
+- message_runtime
+- std_msgs
+- image_transport
+- message_generation
+- ardrone_autonomy
+- cv_bridge
+description: The ucl_drone package
+license: TODO
+maintainers: laboinmastudent <laboinmastudent@todo.todo>
+msgs:
+- Pose3D
+package_type: package
+repo_url: ''
+srvs:
+- SetAltRef
+- MapChunk
+- Projection
+- FeaturesArray
+url: ''

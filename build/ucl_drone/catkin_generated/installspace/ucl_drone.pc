@@ -1,0 +1,8 @@
+prefix=/home/felicien/Desktop/origin2/ucl_drone/install
+
+Name: ucl_drone
+Description: Description of ucl_drone
+Version: 0.0.0
+Cflags: -I/home/felicien/Desktop/origin2/ucl_drone/install/include
+Libs: -L/home/felicien/Desktop/origin2/ucl_drone/install/lib 
+Requires: message_runtime

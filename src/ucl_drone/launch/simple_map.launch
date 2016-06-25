@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<!-- This is a sample lanuch file, please change it based on your needs -->
+<launch>
+  <!-- IPv4 address of your drones -->
+  <arg name="drone_name" default="drone_5" />
+  <arg name="mb1_ip" default="192.168.1.5" />
+  <arg name="mb2_ip" default="192.168.1.15" />
+  <!-- Ultrasound frequency (7 or 8). -->
+  <arg name="freq" default="8" />
+
+
+  <group ns="ucl_$(arg drone_name)">
+
+    <group ns="motherboard2">
+
+            <node name="ucl_drone_simple_map" pkg="ucl_drone" type="simple_map" output="screen">
+            </node>
+    </group>
+</group>
+
+</launch>

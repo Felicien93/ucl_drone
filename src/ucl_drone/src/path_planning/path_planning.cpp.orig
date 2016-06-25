@@ -1,0 +1,436 @@
+#include "ucl_drone/path_planning.h"
+
+/*Il faut encore creer des durees ros pour que le drone fasse un sirpentin avec des nouvelles
+coordonnees a chaque fois
+avoir un message de la strategie lorsque la cible est trouvee histoire de se decaller et se poser
+Il faut que le strategie envoie ensuite les coordoonnes de la cible au nouveau drone
+*/
+
+PathPlanning::PathPlanning()
+{
+  std::string drone_prefix;
+  ros::param::get("~drone_prefix", drone_prefix);
+
+  // Subscribers
+  pose_channel = nh.resolveName("pose_estimation");
+  pose_sub = nh.subscribe(pose_channel, 10, &PathPlanning::poseCb, this);
+
+  strategy_channel = nh.resolveName("strategy");
+  strategy_sub = nh.subscribe(strategy_channel, 10, &PathPlanning::strategyCb, this);
+
+  // Publishers
+  poseref_channel = nh.resolveName("path_planning");
+  poseref_pub = nh.advertise< ucl_drone::PoseRef >(poseref_channel, 1);
+
+  //Just for some tests
+  mapcell_channel = nh.resolveName("mapcell");
+  mapcell_pub = nh.advertise< ucl_drone::cellUpdate >(mapcell_channel, 500);
+
+  // instruction_publishing = false;
+}
+
+// Destructor
+
+PathPlanning::~PathPlanning()
+{
+}
+
+void PathPlanning::reset()
+{
+  // ros::ServiceClient client = nh.serviceClient< std_srvs::Empty
+  // >("motherboard1/ardrone/flattrim");
+  // std_srvs::Empty srv;
+  // client.call(srv);
+
+  next_x = 0;
+  next_y = 0;
+  next_z = 1.5;
+  next_rotZ = 0;
+  i = 0;
+  landing = false;
+  takeoff = false;
+  gridInitialized = false;
+  alt = 1.2;
+  XMax = alt * 0.435 * 0.8;  // faire *0.5
+  YMax = alt * 0.326 * 0.8;
+}
+
+void PathPlanning::publish_poseref()
+{
+  // instantiate the poseref message
+  ucl_drone::PoseRef poseref_msg;
+
+  poseref_msg.x = next_x;
+  poseref_msg.y = next_y;
+  poseref_msg.z = next_z;
+  poseref_msg.rotZ = next_rotZ;
+  poseref_msg.landAndStop = landing;
+  poseref_msg.takeoffAndStart = takeoff;
+
+  // publish
+  // if (poseref_pub.getNumSubscribers() > 0)
+  //{
+  poseref_pub.publish(poseref_msg);
+  ROS_DEBUG("ucl_drone::path_planning PoseRef Published");
+  //}
+}
+
+void PathPlanning::poseCb(const ucl_drone::Pose3D::ConstPtr posePtr)
+{
+  lastPoseReceived = *posePtr;
+}
+
+void PathPlanning::strategyCb(const ucl_drone::StrategyMsg::ConstPtr strategyPtr)
+{
+  lastStrategyReceived = *strategyPtr;
+  // ROS_INFO("strategy received in PP is : %lf", lastStrategyReceived.type);
+}
+
+// code pour serpentin :
+bool PathPlanning::xy_desired()
+{
+  // printf("distance : %lf \n ", sqrt((lastPoseReceived.x - next_x) * (lastPoseReceived.x -next_x)
+  // +
+  //(lastPoseReceived.y - next_y) * (lastPoseReceived.y - next_y)));
+  if (sqrt((lastPoseReceived.x - next_x) * (lastPoseReceived.x - next_x) +
+           (lastPoseReceived.y - next_y) * (lastPoseReceived.y - next_y)) < 0.35)
+  {
+    printf("i: %d\n", i);
+    if (i % 2 == 0)
+    {
+      next_x += 1;
+    }
+    else if (i % 4 == 1)
+    {
+      next_y += 1;
+    }
+    else  //(i%4==3)
+    {
+      next_y -= 1;
+    }
+    i++;
+    return true;
+  }
+  else
+  {
+    return false;
+  }
+}
+
+void PathPlanning::InitializeGrid()
+{
+  // Set all the cells to "unexplored"
+  for (i = 0; i < SIDE * 10; i++)
+  {
+    for (j = 0; j < SIDE * 10; j++)
+    {
+      myGrid[i][j] = 0;
+    }
+  }
+  gridInitialized = true;
+}
+
+bool PathPlanning::ThereIsAWallCell(int i, int j)  // modified
+{
+  yfromcell2 = -((j / 10.0) - SIDE / 2.0);
+  xfromcell2 = SIDE - (i / 10.0);
+
+  // ROS_INFO("i is :  %d    , j is : %d \n", i, j);
+  // ROS_INFO("xfromcell2 is : %lf    , yfromcell2 is : %lf \n", xfromcell2, yfromcell2);
+
+<<<<<<< HEAD
+  if (yfromcell2 >= (SIDE / 2.0 - 0.2) || yfromcell2 <= -(SIDE - 0.4) / 2.0)
+  {
+    return true;
+  }
+  else if (xfromcell2 >= SIDE - 0.2|| xfromcell2 <= 0.2)
+=======
+  if (yfromcell2 > (SIDE / 2.0 - 0.2) || yfromcell2 < -(SIDE - 0.4) / 2.0)
+  {
+    return true;
+  }
+  else if (xfromcell2 > SIDE - 0.2 || xfromcell2 < 0.2)
+>>>>>>> 2dc0cca9e13039cfa89e9a70198d018f2d66b6f6
+  {
+    return true;
+  }
+  else
+  {
+    return false;
+  }
+}
+
+// !! abscisse = I and ordoonee = J
+void PathPlanning::AbsOrdMinMax(double x, double y, int* iMin, int* iMax, int* jMin,
+                                int* jMax)  // Modified
+{
+  printf("I'm calculating AbsOrdMinMax\n");
+  *jMin = fmax(0, (int)(10 * SIDE / 2.0 - (y + YMax) * 10));
+  *jMax = fmin((int)(10 * SIDE / 2.0 - (y - YMax) * 10), SIDE * 10);
+  *iMin = fmax(0, (int)(10 * SIDE - (x + XMax) * 10));
+  *iMax = fmin((int)(10 * SIDE - (x - XMax) * 10), SIDE * 10);
+}
+
+void PathPlanning::CellToXY(int i, int j, double* xfromcell, double* yfromcell)  // Modified
+{
+  *yfromcell = (double)(SIDE / 2.0 - j / 10.0);
+  *xfromcell = (double)SIDE - (i / 10.0);
+}
+
+void PathPlanning::UpdateMap(double x, double y)  // Modified
+{
+  ROS_INFO("I'm in the updatemap function");
+  AbsOrdMinMax(x, y, &myAbsMin, &myAbsMax, &myOrdMin, &myOrdMax);
+  ROS_INFO("I'm in the updatemap function after absOrdMinMax function");
+  printf("myOrdMin: %d     myOrdMax: %d      myAbsMin: %d    myAbsMax: %d   \n", myOrdMin, myOrdMax,
+         myAbsMin, myAbsMax);
+  ucl_drone::cellUpdate cellUpdateMsg;
+  for (i = myAbsMin; i < myAbsMax; i++)
+  {
+    for (j = myOrdMin; j < myOrdMax; j++)
+    {
+      // ROS_INFO("I'm in the updatemap loop for (i,j) %d, %d \n", i, j);
+
+      if (myGrid[i][j] == 0 || myGrid[i][j] == 2)
+      {
+        if (!ThereIsAWallCell(i, j))
+        {
+          if (i == myAbsMin || i == myAbsMax - 1 || j == myOrdMin || j == myOrdMax - 1)
+          {
+            if(myGrid[i][j]==2)
+            {
+              printf("I put a border cell\n");
+            }
+            else
+            {
+              printf("I put a NEW border cell\n");
+              cellUpdateMsg.i=i;
+              cellUpdateMsg.j=j;
+              cellUpdateMsg.type=2;
+              mapcell_pub.publish(cellUpdateMsg);
+            }
+            myGrid[i][j] = 2;
+
+          }
+          else
+          {
+            myGrid[i][j] = 1;
+            printf("I put an explored cell\n");
+            cellUpdateMsg.i=i;
+            cellUpdateMsg.j=j;
+            cellUpdateMsg.type=1;
+            mapcell_pub.publish(cellUpdateMsg);
+          }
+        }
+        else
+        {
+          myGrid[i][j] = 3;
+          printf("I put a wall cell\n");
+          cellUpdateMsg.i=i;
+          cellUpdateMsg.j=j;
+          cellUpdateMsg.type=3;
+          mapcell_pub.publish(cellUpdateMsg);
+        }
+      }
+    }
+  }
+}
+
+double PathPlanning::distance(int i, int j, int k, int l)
+{
+  return sqrt((i - k) * (i - k) + (j - l) * (j - l));
+}
+
+void PathPlanning::advanced_xy_desired(double x, double y, double* k, double* l)
+{
+  int absc = (int)(SIDE - x) * 10;
+  int ord = (int)(SIDE / 2.0 - y) * 10;
+  bestDist = 1000000.0;
+  closestJ = SIDE * 10 / 2.0;
+  closestI = SIDE * 10;
+  for (i = 0; i < SIDE * 10; i++)
+  {
+    for (j = 0; j < SIDE * 10; j++)
+    {
+      if (myGrid[i][j] == 2 && distance(absc, ord, i, j) < bestDist)
+      {
+        bestDist = distance(absc, ord, i, j);
+        closestJ = j;
+        closestI = i;
+      }
+    }
+  }
+  if (bestDist == 1000000.0)
+  {
+    ROS_INFO("The map was explored completely, there are no more border cells!");
+  }
+  // printf("closestI should be  50 and is: %d \n", closestI);
+  CellToXY(closestI, closestJ, k, l);
+}
+
+void PathPlanning::SetRef(double x_ref, double y_ref, double z_ref, double rotZ_ref)
+{
+  this->next_x = x_ref;
+  this->next_y = y_ref;
+  this->next_z = z_ref;
+  this->next_rotZ = rotZ_ref;
+}
+
+int main(int argc, char** argv)
+{
+  ROS_INFO_STREAM("poseref_sending started!");
+  ros::init(argc, argv, "path_planning");
+  PathPlanning myPath;
+  ros::Rate r(20);
+  printf("Pathplanning launched");
+  ROS_DEBUG("path planning initialized");
+
+  myPath.reset();
+  myPath.publish_poseref();
+  ros::spinOnce();
+  r.sleep();
+  ROS_INFO_STREAM("poseref initialized and launched");
+  while (ros::ok())
+  {
+    if (myPath.lastStrategyReceived.type == 1.0)
+    {
+      myPath.takeoff = true;
+      myPath.publish_poseref();
+    }
+    else if (myPath.lastStrategyReceived.type == 7.0)
+    {
+      if (myPath.xy_desired() == true)
+      {
+        myPath.takeoff = true;
+        ros::Duration(5).sleep();
+        myPath.publish_poseref();
+        ROS_INFO_STREAM("publishing poseref in the loop");
+      }
+    }
+    else if (myPath.lastStrategyReceived.type == 3.0)
+    {
+      myPath.takeoff = true;
+      myPath.SetRef(myPath.lastStrategyReceived.x, myPath.lastStrategyReceived.y + 0.5,
+                    myPath.next_z,
+                    myPath.next_rotZ);  // Pas correct, ne tient pas compte de la
+                                        // position du drone maitre
+      myPath.publish_poseref();
+    }
+
+    else if (myPath.lastStrategyReceived.type == 4.0)
+    {
+      myPath.takeoff = false;
+      myPath.landing = true;
+      myPath.publish_poseref();
+    }
+
+    else if (myPath.lastStrategyReceived.type == 5.0)
+    {
+      myPath.takeoff = true;
+      myPath.SetRef(myPath.lastStrategyReceived.x, myPath.lastStrategyReceived.y, myPath.next_z,
+                    myPath.next_rotZ);
+      myPath.publish_poseref();
+    }
+
+    else if (myPath.lastStrategyReceived.type == 6.0)
+    {
+      myPath.next_z = 1.5;
+      if (sqrt((myPath.lastPoseReceived.x) * (myPath.lastPoseReceived.x) +
+               (myPath.lastPoseReceived.y) * (myPath.lastPoseReceived.y)) < 0.15)
+      {
+        myPath.takeoff = false;
+        myPath.landing = true;
+      }
+      else if (!myPath.landing)
+      {
+        myPath.takeoff = true;
+        myPath.SetRef(0, 0, myPath.next_z, myPath.next_rotZ);
+      }
+      myPath.publish_poseref();
+    }
+
+    else if (myPath.lastStrategyReceived.type == 2.0)
+    {
+      if (!myPath.gridInitialized)
+      {
+        ROS_INFO("I am initializing the grid");
+
+        myPath.InitializeGrid();
+      }
+
+      myPath.takeoff = true;
+      myPath.UpdateMap(myPath.lastPoseReceived.x, myPath.lastPoseReceived.y);
+      ROS_INFO("I have updated the map");
+
+      myPath.advanced_xy_desired(myPath.lastPoseReceived.x, myPath.lastPoseReceived.y,
+                                 &myPath.poseRefX, &myPath.poseRefY);
+      myPath.SetRef(myPath.poseRefX, myPath.poseRefY, myPath.next_z, myPath.next_rotZ);
+      ROS_INFO("poseref is : (%lf, %lf)", myPath.poseRefX, myPath.poseRefY);
+      ros::Duration(1).sleep();
+      myPath.publish_poseref();
+    }
+
+    // Tests pour rapport
+    else if (myPath.lastStrategyReceived.type == 8.0)
+    {
+      myPath.takeoff = true;
+      myPath.SetRef(0.0, 0.0, 1.0, 0.0);
+      myPath.publish_poseref();
+      ros::Duration(20).sleep();
+      myPath.SetRef(1.0, 1.0, 1.5, 0.5);
+      myPath.publish_poseref();
+      ros::Duration(20).sleep();
+      myPath.SetRef(0.0, 0.0, 1.0, 0.0);
+      myPath.publish_poseref();
+      ros::Duration(20).sleep();
+      myPath.SetRef(-1.0, -1.0, 2.0, -0.5);
+      myPath.publish_poseref();
+      ros::Duration(20).sleep();
+    }
+
+    ros::spinOnce();
+    r.sleep();
+  }
+
+  return 0;
+}
+
+// code pour yaw :
+
+/*void PathPlanning::yaw_desired() //mettre un boolean pour activer ou pas
+{
+  double delta_x=next_x-lastPoseReceived.x;
+  double delta_y=next_y-lastPoseReceived.y;
+  if(sqrt(delta_x*delta_x+delta_y*delta_y)<1.5)
+  {
+  next_yaw=old_next_yaw;
+  }
+  else
+  {
+  double theta;
+  if(delta_x!=0)
+  {
+  theta=atan(delta_y/delta_x);
+  }
+  else
+  {
+  theta=3.14159;
+  }
+  if(delta_y<0 && delta_x<0)
+  {
+  theta+=3.14159;
+      if(theta>3.14159)
+      {
+          theta=theta-2*3.14159;
+      }
+  }
+  else if(delta_y>0 && delta_x<0)
+  {
+  theta=abs(theta);
+  }
+  old_next_yaw=next_yaw;
+  next_yaw=theta;
+  }
+
+}
+*/
